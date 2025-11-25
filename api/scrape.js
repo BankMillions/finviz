@@ -1,4 +1,4 @@
-// --- api/scrape.js (OWNERSHIP UPDATE) ---
+// --- api/scrape.js (FINAL VERSION with SHORT DATA) ---
 
 const cheerio = require('cheerio');
 
@@ -16,44 +16,41 @@ module.exports = async (req, res) => {
         const html = await response.text();
         const $ = cheerio.load(html);
 
-        let shsOutstandText = null;
-        let shsFloatText = null;
-        let insiderOwnText = null; // New
-        let instOwnText = null;    // New
+        let data = {};
 
-        // More robust search for all 4 values
+        // Robust search to find all key-value pairs in the table
         $('.snapshot-td2').each(function() {
             const label = $(this).text();
-            if (label === 'Shs Outstand') shsOutstandText = $(this).next().text();
-            if (label === 'Shs Float') shsFloatText = $(this).next().text();
-            if (label === 'Insider Own') insiderOwnText = $(this).next().text();
-            if (label === 'Inst Own') instOwnText = $(this).next().text();
+            const value = $(this).next().text();
+
+            if (label === 'Shs Outstand') data.shsOutstand = value;
+            if (label === 'Shs Float') data.shsFloat = value;
+            if (label === 'Insider Own') data.insiderOwn = value;
+            if (label === 'Inst Own') data.instOwn = value;
+            if (label === 'Short Float') data.shortFloat = value; // New
+            if (label === 'Short Ratio') data.shortRatio = value; // New
         });
 
-        if (!shsOutstandText || !shsFloatText) {
-             return res.status(404).json({ error: 'Could not find share data on Finviz page.' });
+        if (!data.shsOutstand || !data.shsFloat) {
+             return res.status(404).json({ error: 'Could not find core share data.' });
         }
         
         const parseNum = (text) => {
-            if (!text) return 0;
+            if (!text || text === '-') return 0;
             const num = parseFloat(text);
             if (text.endsWith('B')) return num * 1e9;
             if (text.endsWith('M')) return num * 1e6;
             return num;
         };
         
-        const sharesOutstanding = parseNum(shsOutstandText);
-        const floatShares = parseNum(shsFloatText);
-        // Parse percentages, remove the '%' and convert to a decimal (e.g., "10.5%" -> 0.105)
-        const insiderOwn = insiderOwnText ? parseFloat(insiderOwnText) / 100 : 0;
-        const instOwn = instOwnText ? parseFloat(instOwnText) / 100 : 0;
-
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.status(200).json({
-            sharesOutstanding,
-            floatShares,
-            insiderOwn, // Return new data
-            instOwn     // Return new data
+            sharesOutstanding: parseNum(data.shsOutstand),
+            floatShares: parseNum(data.shsFloat),
+            insiderOwn: parseNum(data.insiderOwn) / 100,
+            instOwn: parseNum(data.instOwn) / 100,
+            shortFloat: data.shortFloat || 'N/A', // Return as string
+            shortRatio: data.shortRatio || 'N/A'  // Return as string
         });
 
     } catch (error) {
